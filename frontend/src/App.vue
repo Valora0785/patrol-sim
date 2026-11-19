@@ -1,5 +1,5 @@
 <script setup>
-import { reactive, onMounted, onUnmounted } from 'vue'
+import { reactive, ref, onMounted, onUnmounted } from 'vue'
 
 const cellSize = 36
 
@@ -142,6 +142,83 @@ onUnmounted(() => {
   disposed = true
   clearInterval(timer)
 })
+const patrolPoints = [[4, 8], [12, 3], [14, 10]]
+const patrolStatus = ref('idle')
+const patrolMessage = ref('')
+const patrolProgress = ref({ active: false, total: 3, current: 0, done: false })
+let patrolTimer = null
+let patrolStartedAt = 0
+
+function mockGetPatrolProgress() {
+  const total = patrolProgress.value.total
+  const current = Math.min(total, Math.floor((Date.now() - patrolStartedAt) / 2000))
+  const done = current === total
+
+  return { active: !done, total, current, done }
+}
+
+function stopPatrolPolling() {
+  clearInterval(patrolTimer)
+  patrolTimer = null
+}
+
+function startPatrolPolling(total) {
+  stopPatrolPolling()
+  patrolProgress.value = { active: true, total, current: 0, done: false }
+  patrolStartedAt = Date.now()
+
+  patrolTimer = setInterval(() => {
+    patrolProgress.value = mockGetPatrolProgress()
+
+    if (patrolProgress.value.done) {
+      stopPatrolPolling()
+      patrolStatus.value = 'idle'
+      patrolMessage.value = ''
+    }
+  }, 500)
+}
+
+onUnmounted(stopPatrolPolling)
+async function mockStartPatrol({ points }) {
+  if (patrolStatus.value === 'patrolling') {
+    return { ok: false, status: 409, code: 'PATROL_ALREADY_RUNNING' }
+  }
+
+  return {
+    ok: true,
+    data: { total: points.length, steps: 32, status: 'patrolling' },
+  }
+}
+
+async function startPatrol() {
+  patrolMessage.value = ''
+  const result = await mockStartPatrol({ points: patrolPoints })
+
+  if (result.code === 'PATROL_ALREADY_RUNNING') {
+    patrolMessage.value = '巡检已在运行'
+    return
+  }
+
+  patrolStatus.value = result.data.status
+  patrolStatus.value = result.data.status
+  startPatrolPolling(result.data.total)
+}
+async function mockStopPatrol() {
+  return { status: 'idle' }
+}
+
+async function stopPatrol() {
+  const result = await mockStopPatrol()
+
+  stopPatrolPolling()
+  patrolStatus.value = result.status
+  patrolProgress.value = {
+    ...patrolProgress.value,
+    active: false,
+    done: false,
+  }
+  patrolMessage.value = ''
+}
 </script>
 
 <template>
@@ -219,5 +296,32 @@ onUnmounted(() => {
       · 朝向：{{ robot.heading }}°
       · 状态：{{ robot.status }}
     </p>
+    <section>
+  <h2>自动巡检</h2>
+  <p>巡检点：(4,8) → (12,3) → (14,10)</p>
+
+  <button type="button" @click="startPatrol">开始巡检</button>
+<p>状态：{{ patrolStatus === 'patrolling' ? '巡检中' : '空闲' }}</p>
+<p v-if="patrolMessage" role="alert">{{ patrolMessage }}</p>
+  <button
+  type="button"
+  :disabled="patrolStatus !== 'patrolling'"
+  @click="stopPatrol"
+>
+  停止巡检
+</button>
+
+ <p>
+  <label for="patrol-progress">
+    巡检进度：{{ patrolProgress.current }} / {{ patrolProgress.total }}
+  </label>
+  <progress
+    id="patrol-progress"
+    :value="patrolProgress.current"
+    :max="patrolProgress.total"
+  />
+  <span v-if="patrolProgress.done">巡检完成</span>
+</p>
+</section>
   </main>
 </template>
