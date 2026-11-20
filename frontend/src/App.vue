@@ -20,6 +20,19 @@ const control = reactive({
   busy: false,
   message: '',
 })
+const sensorBlocked = ref(false)
+const sensorDistance = ref(null)
+
+const fetchSensorData = async () => {
+try {
+const res = await fetch("http://127.0.0.1:8000/api/sensors/front")
+const data = await res.json()
+sensorBlocked.value = data.blocked
+sensorDistance.value = data.distance
+} catch { /* 后端未起：保持上次值 */ }
+}
+
+const sensorTimer = setInterval(fetchSensorData, 500)
 
 async function sendAction(action) {
   if (control.busy) return
@@ -246,6 +259,7 @@ async function stopPatrol() {
     patrolMessage.value = '停止巡检失败，请检查后端连接'
   }
 }
+onUnmounted(() => clearInterval(sensorTimer))
 </script>
 
 <template>
@@ -350,5 +364,18 @@ async function stopPatrol() {
   <span v-if="patrolProgress.done">巡检完成</span>
 </p>
 </section>
+    <div class="sensor-box">
+  <p>前方传感器</p >
+  <p>blocked：{{ sensorBlocked }}</p >
+  <p>distance：{{ sensorDistance }}</p >
+</div>
   </main>
 </template>
+<style scoped>
+.sensor-box {
+  border: 1px solid #222;
+  padding: 8px 12px;
+  margin-top: 8px;
+  display: inline-block;
+}
+</style>
