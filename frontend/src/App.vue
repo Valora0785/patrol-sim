@@ -312,10 +312,10 @@ async function stopPatrol() {
 </text>
 
     </svg>
-   <button :disabled="control.busypatrol || Status === 'patrolling' || robot.status === 'patrolling'" @click="turnLeft">左转</button>
-<button :disabled="control.busy || Status === 'patrolling' || robot.status === 'patrolling'" @click="moveForward">前进</button>
-<button :disabled="control.busy || Status === 'patrolling' || robot.status === 'patrolling'" @click="moveBack">后退</button>
-<button :disabled="control.busy || Status === 'patrolling' || robot.status === 'patrolling'" @click="turnRight">右转</button>
+   <button :disabled="control.busy || patrolStatus === 'patrolling' || robot.status === 'patrolling'" @click="turnLeft">左转</button>
+<button :disabled="control.busy || patrolStatus === 'patrolling' || robot.status === 'patrolling'" @click="moveForward">前进</button>
+<button :disabled="control.busy || patrolStatus === 'patrolling' || robot.status === 'patrolling'"@click="moveBack">后退</button>
+<button :disabled="control.busy || patrolStatus === 'patrolling' || robot.status === 'patrolling'"@click="turnRight">右转</button>
 
 <p role="status">{{ control.message }}</p>
     <p>
