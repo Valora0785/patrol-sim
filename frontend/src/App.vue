@@ -165,59 +165,86 @@ function stopPatrolPolling() {
 function startPatrolPolling(total) {
   stopPatrolPolling()
   patrolProgress.value = { active: true, total, current: 0, done: false }
-  patrolStartedAt = Date.now()
 
-  patrolTimer = setInterval(() => {
-    patrolProgress.value = mockGetPatrolProgress()
+  let pending = false
 
-    if (patrolProgress.value.done) {
-      stopPatrolPolling()
-      patrolStatus.value = 'idle'
-      patrolMessage.value = ''
+  const timer = setInterval(async () => {
+    if (pending) return
+    pending = true
+
+    try {
+      const response = await fetch('http://127.0.0.1:8000/api/patrol/progress')
+      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+
+      const progress = await response.json()
+      if (patrolTimer !== timer) return
+
+      patrolProgress.value = progress
+
+      if (!progress.active) {
+        patrolStatus.value = 'idle'
+        stopPatrolPolling()
+      }
+    } catch (error) {
+      console.error('读取巡检进度失败', error)
+    } finally {
+      pending = false
     }
   }, 500)
+
+  patrolTimer = timer
 }
 
 onUnmounted(stopPatrolPolling)
-async function mockStartPatrol({ points }) {
-  if (patrolStatus.value === 'patrolling') {
-    return { ok: false, status: 409, code: 'PATROL_ALREADY_RUNNING' }
-  }
-
-  return {
-    ok: true,
-    data: { total: points.length, steps: 32, status: 'patrolling' },
-  }
-}
-
 async function startPatrol() {
   patrolMessage.value = ''
-  const result = await mockStartPatrol({ points: patrolPoints })
 
-  if (result.code === 'PATROL_ALREADY_RUNNING') {
-    patrolMessage.value = '巡检已在运行'
-    return
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/patrol/start', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ points: patrolPoints }),
+    })
+    const data = await response.json()
+
+    if (!response.ok) {
+      patrolMessage.value = data.error?.message ?? `启动失败（HTTP ${response.status}）`
+      return
+    }
+
+    patrolStatus.value = data.status
+    startPatrolPolling(data.total)
+  } catch (error) {
+    console.error('启动巡检失败', error)
+    patrolMessage.value = '启动巡检失败，请检查后端是否已启动'
   }
-
-  patrolStatus.value = result.data.status
-  patrolStatus.value = result.data.status
-  startPatrolPolling(result.data.total)
 }
-async function mockStopPatrol() {
-  return { status: 'idle' }
-}
-
 async function stopPatrol() {
-  const result = await mockStopPatrol()
-
-  stopPatrolPolling()
-  patrolStatus.value = result.status
-  patrolProgress.value = {
-    ...patrolProgress.value,
-    active: false,
-    done: false,
-  }
   patrolMessage.value = ''
+
+  try {
+    const response = await fetch('http://127.0.0.1:8000/api/patrol/stop', {
+      method: 'POST',
+    })
+
+    if (!response.ok) {
+      const data = await response.json().catch(() => ({}))
+      patrolMessage.value =
+        data.error?.message ?? `停止失败（HTTP ${response.status}）`
+      return
+    }
+
+    stopPatrolPolling()
+    patrolStatus.value = 'idle'
+    patrolProgress.value = {
+      ...patrolProgress.value,
+      active: false,
+      done: false,
+    }
+  } catch (error) {
+    console.error('停止巡检失败', error)
+    patrolMessage.value = '停止巡检失败，请检查后端连接'
+  }
 }
 </script>
 
@@ -285,10 +312,10 @@ async function stopPatrol() {
 </text>
 
     </svg>
-   <button :disabled="control.busy" @click="turnLeft">左转</button>
-<button :disabled="control.busy" @click="moveForward">前进</button>
-<button :disabled="control.busy" @click="moveBack">后退</button>
-<button :disabled="control.busy" @click="turnRight">右转</button>
+   <button :disabled="control.busypatrol || Status === 'patrolling' || robot.status === 'patrolling'" @click="turnLeft">左转</button>
+<button :disabled="control.busy || Status === 'patrolling' || robot.status === 'patrolling'" @click="moveForward">前进</button>
+<button :disabled="control.busy || Status === 'patrolling' || robot.status === 'patrolling'" @click="moveBack">后退</button>
+<button :disabled="control.busy || Status === 'patrolling' || robot.status === 'patrolling'" @click="turnRight">右转</button>
 
 <p role="status">{{ control.message }}</p>
     <p>
